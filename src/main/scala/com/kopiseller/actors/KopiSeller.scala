@@ -1,19 +1,21 @@
 package com.kopiseller.actors
 
-import akka.actor.Actor
+import akka.actor.{Actor, Props}
 import com.kopiseller.actors.ShopOwner.Coffee
 
 object KopiSeller {
+  def props(name: String): Props = Props(new KopiSeller(name))
+
   /**
    * Messages
    */
   final case class Add(cups: Int)
   final case class Buy(cups: Int)
-  final case object GetAvailable
+  final case object GetCount
   final case object Clear
 }
 
-class KopiSeller() extends Actor {
+class KopiSeller(name: String) extends Actor {
   import KopiSeller._
 
   var coffeeCount = 0
@@ -28,7 +30,7 @@ class KopiSeller() extends Actor {
       }
       else sender() ! Coffee(0)
 
-    case GetAvailable => sender() ! coffeeCount
+    case GetCount => sender() ! coffeeCount
     case Clear => coffeeCount = 0
   }
 }
