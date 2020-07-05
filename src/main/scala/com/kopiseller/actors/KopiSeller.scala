@@ -1,7 +1,6 @@
 package com.kopiseller.actors
 
 import akka.actor.{Actor, Props}
-import com.kopiseller.actors.ShopOwner.Coffee
 
 object KopiSeller {
   def props(name: String): Props = Props(new KopiSeller(name))
@@ -25,10 +24,10 @@ class KopiSeller(name: String) extends Actor {
 
     case Buy(cups) =>
       if (cups <= coffeeCount) {
-        sender() ! Coffee(cups)
+        sender() ! cups
         coffeeCount -= cups
       }
-      else sender() ! Coffee(0)
+      else sender() ! 0
 
     case GetCount => sender() ! coffeeCount
     case Clear => coffeeCount = 0

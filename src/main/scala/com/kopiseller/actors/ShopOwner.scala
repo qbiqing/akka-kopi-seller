@@ -1,10 +1,12 @@
 package com.kopiseller.actors
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{Actor, ActorRef, Props}
 import akka.util.Timeout
 
 object ShopOwner {
-  final case class Coffee(cups: Int)
+
+  def props()(implicit timeout: Timeout): Props = Props(new ShopOwner())
+
   /**
    * Messages
    */
@@ -18,6 +20,8 @@ object ShopOwner {
 
   sealed trait EventResponse
   final case class SellerNotFound(name: String) extends EventResponse
+  final case class SellerCreated(name: String) extends EventResponse
+  final case class SellerExists(name: String) extends EventResponse
 }
 
 class ShopOwner(implicit timeout: Timeout) extends Actor {
@@ -33,14 +37,19 @@ class ShopOwner(implicit timeout: Timeout) extends Actor {
 
   def receive: Receive = {
     case CreateSeller(name) =>
-      val seller: ActorRef = createKopiSeller(name)
-      sellers :+ seller
+      def create(): Unit = {
+        sellers :+ createKopiSeller(name)
+        sender() ! SellerCreated(name)
+      }
+      // If already exists
+      context.child(name).fold(create())(_ ⇒ sender() ! SellerExists)
 
     case Start(maxLimit) =>
       started = true
-      for (i <- 0 to maxLimit) {
-      if (started) makeCoffee()
-    }
+
+      for (_ <- 0 to maxLimit) {
+        if (started) makeCoffee()
+      }
 
     case Stop => started = false
 
@@ -51,12 +60,12 @@ class ShopOwner(implicit timeout: Timeout) extends Actor {
         child.forward(KopiSeller.Buy(cups))
       context.child(name).fold(notFound())(buy)
 
-
     case GetCountFromSeller(name: String) =>
       def notFound(): Unit =
         sender() ! SellerNotFound(name)
-      def getCount(name: String): Unit = Unit
-
+      def getCount(child: ActorRef): Unit =
+        child.forward(KopiSeller.GetCount)
+      sender() ! context.child(name).fold(notFound())(getCount)
 
     case ClearSellerCount(name: String) =>
       def notFound(): Unit =
