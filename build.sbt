@@ -13,7 +13,6 @@ libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-http-core" % akkaHttp,
     "com.typesafe.akka" %% "akka-http" % akkaHttp,
-    "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
     "com.typesafe.akka" %% "akka-stream" % akkaVersion,
     "com.typesafe.play" %% "play-ws-standalone-json" % "2.1.2",
     "de.heikoseeberger" %% "akka-http-play-json" % "1.33.0",
