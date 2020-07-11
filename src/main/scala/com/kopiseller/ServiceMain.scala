@@ -1,13 +1,13 @@
 package com.kopiseller
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
+
 import akka.actor.ActorSystem
 import akka.event.Logging
-import akka.http.scaladsl.Http.ServerBinding
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.Http.ServerBinding
 import akka.stream.Materializer
 import akka.util.Timeout
-
 import com.kopiseller.routes.RestApi
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -20,9 +20,9 @@ object ServiceMain extends App with RequestTimeout {
   implicit val ec: ExecutionContextExecutor = system.dispatcher
   implicit val materializer: Materializer = Materializer(system)
 
-  val api = new RestApi(system, requestTimeout(config)).routes
+  val routes = new RestApi(system, requestTimeout(config)).routes
 
-  val bindingFuture: Future[ServerBinding] = Http().bindAndHandle(api, host, port) // starts the HTTP server
+  val bindingFuture: Future[ServerBinding] = Http().bindAndHandle(routes, host, port) // starts the HTTP server
 
   val log = Logging(system.eventStream, "kopi-seller")
 

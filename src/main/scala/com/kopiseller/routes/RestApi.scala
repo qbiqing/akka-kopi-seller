@@ -1,17 +1,17 @@
 package com.kopiseller.routes
 
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
+
 import akka.actor.{ActorRef, ActorSystem}
-import akka.util.Timeout
-import akka.pattern.ask
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
+import akka.pattern.ask
+import akka.util.Timeout
+import com.kopiseller.actors.ShopOwner.EventResponse
 import com.kopiseller.actors._
-
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
-import StatusCodes._
-import com.kopiseller.{Error, EventMarshaller, Seller}
-import com.kopiseller.actors.ShopOwner.{CreateSeller, EventResponse, GetCountFromSeller}
+import com.kopiseller.{Drink, Error, EventMarshaller, MakeCoffee}
+import org.slf4j.LoggerFactory
 
 
 class RestApi(system: ActorSystem, timeout: Timeout) extends RestRoutes {
@@ -23,23 +23,41 @@ class RestApi(system: ActorSystem, timeout: Timeout) extends RestRoutes {
 
 trait RestRoutes extends KopiShopApi with EventMarshaller {
   val service = "kopi-seller"
+  val logger = LoggerFactory.getLogger(classOf[RestApi])
 
   protected val createSellerRoute: Route =
-    path(service / "sellers") {
+    pathPrefix(service / "create") {
       post {
-        entity(as[Seller]) { params =>
-          onSuccess(createSeller(params.name)) {
-            case ShopOwner.SellerCreated(name) => complete(Created, name)
-            case ShopOwner.SellerExists(name) =>
-              val err = Error(s"$name seller already exists!")
-              complete(BadRequest, err)
-            case _ => complete(BadRequest, Error("bad request"))
+        pathEndOrSingleSlash {
+          entity(as[Drink]) { t =>
+            onSuccess(createSeller(t.name)) {
+              case ShopOwner.DrinkCreated(name) =>
+                complete(Created, s"$name created")
+              case ShopOwner.DrinkExists(name) =>
+                val err = Error(s"$name seller already exists!")
+                complete(BadRequest, err)
+              case _ => complete(BadRequest, Error("bad request"))
+            }
           }
         }
     }
   }
 
-  val routes: Route = createSellerRoute
+  protected val startSellersRoute: Route =
+    pathPrefix(service / "make") {
+      post {
+        pathEndOrSingleSlash {
+          entity(as[MakeCoffee]) { t =>
+            onSuccess(makeCoffee(t.cups)) {
+              case ShopOwner.MadeCoffee() =>
+                complete(s"started making coffee")
+              case _ => complete(InternalServerError, Error("unable to start"))
+            }
+          }
+        }
+      }
+    }
+  val routes: Route = createSellerRoute ~ startSellersRoute
 }
 
 trait KopiShopApi {
@@ -52,11 +70,15 @@ trait KopiShopApi {
   lazy val kopiShop: ActorRef = createShop()
 
   def createSeller(name: String): Future[EventResponse] = {
-    kopiShop.ask(CreateSeller(name))
+    kopiShop.ask(ShopOwner.CreateDrink(name))
       .mapTo[EventResponse]
   }
 
+  def makeCoffee(cups: Int): Future[EventResponse] = {
+    kopiShop.ask(ShopOwner.MakeCoffee(cups)).mapTo[EventResponse]
+  }
+
   def getAvailableCoffee(seller: String): Future[Option[Int]] =
-    kopiShop.ask(GetCountFromSeller(seller)).mapTo[Option[Int]]
+    kopiShop.ask(ShopOwner.GetCount()).mapTo[Option[Int]]
 
 }

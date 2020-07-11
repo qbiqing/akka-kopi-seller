@@ -1,6 +1,10 @@
 package com.kopiseller.actors
 
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
 import akka.actor.{Actor, ActorRef, Props}
+import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 
 object ShopOwner {
@@ -10,75 +14,73 @@ object ShopOwner {
   /**
    * Messages
    */
-  final case class Start(maxLimit: Int)
-  final case object Stop
-
-  final case class CreateSeller(name: String)
-  final case class BuyFromSeller(name: String, cups: Int)
-  final case class GetCountFromSeller(name: String)
-  final case class ClearSellerCount(name: String)
+  final case class MakeCoffee(cups: Int)
+  final case class GetCount()
+  final case class ClearCount()
+  final case class CreateDrink(name: String)
+  final case class BuyDrink(name: String, cups: Int)
 
   sealed trait EventResponse
-  final case class SellerNotFound(name: String) extends EventResponse
-  final case class SellerCreated(name: String) extends EventResponse
-  final case class SellerExists(name: String) extends EventResponse
+  final case class DrinkCreated(name: String) extends EventResponse
+  final case class DrinkNotFound(name: String) extends EventResponse
+  final case class DrinkExists(name: String) extends EventResponse
+  final case class MadeCoffee() extends EventResponse
+  final case class ClearedCount() extends EventResponse
 }
 
 class ShopOwner(implicit timeout: Timeout) extends Actor {
   import ShopOwner._
 
-  /** KopiSeller child */
-  def createKopiSeller(name: String): ActorRef = {
-    context.actorOf(KopiSeller.props(name), name)
+  /** DrinkSeller child */
+  def createDrink(name: String): ActorRef = {
+    context.actorOf(DrinkSeller.props(name), name)
   }
 
-  val sellers: List[ActorRef] = List()
-  var started: Boolean = false
-
   def receive: Receive = {
-    case CreateSeller(name) =>
+    case CreateDrink(name) =>
       def create(): Unit = {
-        sellers :+ createKopiSeller(name)
-        sender() ! SellerCreated(name)
+        createDrink(name)
+        sender() ! DrinkCreated(name)
       }
       // If already exists
-      context.child(name).fold(create())(_ ⇒ sender() ! SellerExists)
+      context.child(name).fold(create())(_ ⇒ sender() ! DrinkExists)
 
-    case Start(maxLimit) =>
-      started = true
-
-      for (_ <- 0 to maxLimit) {
-        if (started) makeCoffee()
+    case MakeCoffee(cups) =>
+      for (_ <- 0 to cups) {
+        makeCoffee()
       }
+      sender() ! MadeCoffee()
 
-    case Stop => started = false
-
-    case BuyFromSeller(name, cups) =>
+    case BuyDrink(name, cups) =>
       def notFound(): Unit =
-        sender() ! SellerNotFound(name)
+        sender() ! DrinkNotFound(name)
       def buy(child: ActorRef): Unit =
-        child.forward(KopiSeller.Buy(cups))
+        child.forward(DrinkSeller.Buy(cups))
       context.child(name).fold(notFound())(buy)
 
-    case GetCountFromSeller(name: String) =>
-      def notFound(): Unit =
-        sender() ! SellerNotFound(name)
-      def getCount(child: ActorRef): Unit =
-        child.forward(KopiSeller.GetCount)
-      sender() ! context.child(name).fold(notFound())(getCount)
+    case GetCount() =>
+      def getCounts = {
+        context.children.map { child =>
+          child.ask(GetCount).mapTo[Option[Int]]
+        }
+      }
+      def getTotalCount(f: Future[Iterable[Option[Int]]]): Future[Int] = {
+        f.map(_.flatten).map(l => l.sum)
+      }
+      pipe(getTotalCount(Future.sequence(getCounts))) to sender()
 
-    case ClearSellerCount(name: String) =>
-      def notFound(): Unit =
-        sender() ! SellerNotFound(name)
+    case ClearCount() =>
       def clear(child: ActorRef): Unit =
-        child.forward(KopiSeller.Clear)
-      context.child(name).fold(notFound())(clear)
+        child.forward(DrinkSeller.Clear)
+      context.children.foreach {
+        child => clear(child)
+      }
+      sender() ! ClearedCount()
   }
 
   private def makeCoffee(): Unit = {
-    for (x <- sellers) yield {
-      x ! KopiSeller.Add(1)
+    for (x <- context.children) yield {
+      x ! DrinkSeller.Add(1)
     }
-    Thread.sleep(1000)
   }
 }
