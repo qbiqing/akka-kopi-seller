@@ -72,7 +72,7 @@ trait RestRoutes extends KopiShopApi with EventMarshaller {
     }
 
   protected val buyCoffeeRoute: Route =
-    pathPrefix(service / "buy-coffee"){
+    pathPrefix(service / "buy"){
       post {
         pathEndOrSingleSlash {
           entity(as[BuyCoffee]) { t =>
@@ -85,7 +85,7 @@ trait RestRoutes extends KopiShopApi with EventMarshaller {
     }
 
   protected val clearCountsRoute: Route =
-    pathPrefix(service / "clear-counts"){
+    pathPrefix(service / "clear"){
       post {
         pathEndOrSingleSlash {
           onSuccess(clearCounts()) {
