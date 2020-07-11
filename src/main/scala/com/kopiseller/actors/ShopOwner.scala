@@ -1,10 +1,6 @@
 package com.kopiseller.actors
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
-
 import akka.actor.{Actor, ActorRef, Props}
-import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 
 object ShopOwner {
@@ -15,7 +11,7 @@ object ShopOwner {
    * Messages
    */
   final case class MakeCoffee(cups: Int)
-  final case class GetCount()
+  final case class GetCount(name: String)
   final case class ClearCount()
   final case class CreateDrink(name: String)
   final case class BuyDrink(name: String, cups: Int)
@@ -46,7 +42,7 @@ class ShopOwner(implicit timeout: Timeout) extends Actor {
       context.child(name).fold(create())(_ ⇒ sender() ! DrinkExists)
 
     case MakeCoffee(cups) =>
-      for (_ <- 0 to cups) {
+      for (_ <- 1 to cups) {
         makeCoffee()
       }
       sender() ! MadeCoffee()
@@ -58,16 +54,12 @@ class ShopOwner(implicit timeout: Timeout) extends Actor {
         child.forward(DrinkSeller.Buy(cups))
       context.child(name).fold(notFound())(buy)
 
-    case GetCount() =>
-      def getCounts = {
-        context.children.map { child =>
-          child.ask(GetCount).mapTo[Option[Int]]
-        }
-      }
-      def getTotalCount(f: Future[Iterable[Option[Int]]]): Future[Int] = {
-        f.map(_.flatten).map(l => l.sum)
-      }
-      pipe(getTotalCount(Future.sequence(getCounts))) to sender()
+    case GetCount(name) =>
+      def notFound(): Unit =
+        sender() ! DrinkNotFound(name)
+      def getCount(child: ActorRef): Unit =
+        child.forward(DrinkSeller.GetDrinkCount)
+      context.child(name).fold(notFound())(getCount)
 
     case ClearCount() =>
       def clear(child: ActorRef): Unit =

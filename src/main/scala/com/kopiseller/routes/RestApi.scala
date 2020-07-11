@@ -10,7 +10,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.kopiseller.actors.ShopOwner.EventResponse
 import com.kopiseller.actors._
-import com.kopiseller.{Drink, Error, EventMarshaller, MakeCoffee}
+import com.kopiseller._
 import org.slf4j.LoggerFactory
 
 
@@ -25,12 +25,12 @@ trait RestRoutes extends KopiShopApi with EventMarshaller {
   val service = "kopi-seller"
   val logger = LoggerFactory.getLogger(classOf[RestApi])
 
-  protected val createSellerRoute: Route =
+  protected val createDrinkRoute: Route =
     pathPrefix(service / "create") {
       post {
         pathEndOrSingleSlash {
           entity(as[Drink]) { t =>
-            onSuccess(createSeller(t.name)) {
+            onSuccess(createDrink(t.name)) {
               case ShopOwner.DrinkCreated(name) =>
                 complete(Created, s"$name created")
               case ShopOwner.DrinkExists(name) =>
@@ -43,21 +43,60 @@ trait RestRoutes extends KopiShopApi with EventMarshaller {
     }
   }
 
-  protected val startSellersRoute: Route =
+  protected val makeCoffeeRoute: Route =
     pathPrefix(service / "make") {
       post {
         pathEndOrSingleSlash {
           entity(as[MakeCoffee]) { t =>
             onSuccess(makeCoffee(t.cups)) {
               case ShopOwner.MadeCoffee() =>
-                complete(s"started making coffee")
-              case _ => complete(InternalServerError, Error("unable to start"))
+                complete(OK, s"made ${t.cups} cups of each coffee")
+              case _ => complete(InternalServerError, Error("unable to make"))
             }
           }
         }
       }
     }
-  val routes: Route = createSellerRoute ~ startSellersRoute
+
+  protected val getCountRoute: Route =
+    pathPrefix(service / "get-count"){
+      get {
+        pathEndOrSingleSlash {
+          entity(as[Drink]) { t =>
+            onSuccess(getAvailableCount(t.name)) { count =>
+                complete(OK, s"$count cups of coffee available")
+            }
+          }
+        }
+      }
+    }
+
+  protected val buyCoffeeRoute: Route =
+    pathPrefix(service / "buy-coffee"){
+      post {
+        pathEndOrSingleSlash {
+          entity(as[BuyCoffee]) { t =>
+            onSuccess(buyCoffee(t.name, t.cups)) { count =>
+              complete(OK, s"bought $count cups of coffee")
+            }
+          }
+        }
+      }
+    }
+
+  protected val clearCountsRoute: Route =
+    pathPrefix(service / "clear-counts"){
+      post {
+        pathEndOrSingleSlash {
+          onSuccess(clearCounts()) {
+            case ShopOwner.ClearedCount() => complete(OK, "cleared all counts!")
+            case _ => complete(InternalServerError, Error("unable to clear"))
+          }
+        }
+      }
+    }
+
+  val routes: Route = createDrinkRoute ~ makeCoffeeRoute ~ getCountRoute ~ buyCoffeeRoute ~ clearCountsRoute
 }
 
 trait KopiShopApi {
@@ -69,7 +108,7 @@ trait KopiShopApi {
 
   lazy val kopiShop: ActorRef = createShop()
 
-  def createSeller(name: String): Future[EventResponse] = {
+  def createDrink(name: String): Future[EventResponse] = {
     kopiShop.ask(ShopOwner.CreateDrink(name))
       .mapTo[EventResponse]
   }
@@ -78,7 +117,12 @@ trait KopiShopApi {
     kopiShop.ask(ShopOwner.MakeCoffee(cups)).mapTo[EventResponse]
   }
 
-  def getAvailableCoffee(seller: String): Future[Option[Int]] =
-    kopiShop.ask(ShopOwner.GetCount()).mapTo[Option[Int]]
+  def getAvailableCount(name: String): Future[Int] =
+    kopiShop.ask(ShopOwner.GetCount(name)).mapTo[Int]
 
+  def buyCoffee(name: String, cups: Int): Future[Int] =
+    kopiShop.ask(ShopOwner.BuyDrink(name, cups)).mapTo[Int]
+
+  def clearCounts(): Future[EventResponse] =
+    kopiShop.ask(ShopOwner.ClearCount()).mapTo[EventResponse]
 }

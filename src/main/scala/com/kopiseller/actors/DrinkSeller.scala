@@ -10,7 +10,7 @@ object DrinkSeller {
    */
   final case class Add(cups: Int)
   final case class Buy(cups: Int)
-  final case object GetCount
+  final case object GetDrinkCount
   final case object Clear
 }
 
@@ -29,7 +29,7 @@ class DrinkSeller(name: String) extends Actor {
       }
       else sender() ! 0
 
-    case GetCount => sender() ! count
+    case GetDrinkCount => sender() ! count
     case Clear => count = 0
   }
 }
