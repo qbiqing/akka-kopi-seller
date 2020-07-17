@@ -39,7 +39,7 @@ class ShopOwner(implicit timeout: Timeout) extends Actor {
         sender() ! DrinkCreated(name)
       }
       // If already exists
-      context.child(name).fold(create())(_ => sender() ! DrinkExists)
+      context.child(name).fold(create())(_ => sender() ! DrinkExists(name))
 
     case MakeCoffee(cups) =>
       for (_ <- 1 to cups) {
